@@ -1,0 +1,2 @@
+# Placeholder for demo image
+# Run main.py and take a screenshot to replace this file
