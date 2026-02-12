@@ -8,7 +8,8 @@ from mouse_controller import MouseController
 
 # Initialize MouseController
 if MouseController:
-    mouse = MouseController(smooth_factor=6)
+    mouse = MouseController(alpha=0.3)
+
 else:
     mouse = None
 
