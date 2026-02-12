@@ -8,7 +8,7 @@ from mouse_controller import MouseController
 
 # Initialize MouseController
 if MouseController:
-    mouse = MouseController(smoothing_factor=6)
+    mouse = MouseController(smooth_factor=6)
 else:
     mouse = None
 
@@ -108,8 +108,8 @@ while True:
 
                 # Move Mouse
                 if mouse:
-                    x3_screen = np.interp(x1, (frameR, 1280 - frameR), (0, mouse.screen_width))
-                    y3_screen = np.interp(y1, (frameR, 720 - frameR), (0, mouse.screen_height))
+                    x3_screen = np.interp(x1, (frameR, 1280 - frameR), (0, mouse.screen_w))
+                    y3_screen = np.interp(y1, (frameR, 720 - frameR), (0, mouse.screen_h))
                     mouse.move(x3_screen, y3_screen)
 
                 # Left Click (Thumb + Index)
