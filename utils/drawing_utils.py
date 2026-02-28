@@ -1,3 +1,4 @@
+# drawing helpers
 import cv2
 
 # Fingertip landmark indices
