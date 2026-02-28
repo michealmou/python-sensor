@@ -4,11 +4,18 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import cv2
 import time
 from pathlib import Path
-from config import NUM_CLASSES, IMAGES_PER_CLASS, CAM_HEIGHT, CAM_WIDTH, COUNTDOWN, DELAY_BETWEEN_CLASSES
+from config import (
+    NUM_CLASSES,
+    IMAGES_PER_CLASS,
+    CAM_HEIGHT,
+    CAM_WIDTH,
+    COUNTDOWN,
+    DELAY_BETWEEN_CLASSES,
+    DATA_DIR,
+    CAMERA_INDEX
+)
 
-DATA_DIR= "./data/raw"
-
-cap=cv2.VideoCapture(0)
+cap=cv2.VideoCapture(CAMERA_INDEX)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
 
@@ -72,7 +79,7 @@ for class_id in range(NUM_CLASSES):
         cv2.putText(frame, f'Class {class_id} - Image {img_num+1}/{IMAGES_PER_CLASS}', (50,50), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
         cv2.putText(frame, 'Press "Q" to quit', (50,100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-        cv2.imshow('Collect', q)
+        cv2.imshow('Collect', frame)
         cv2.imwrite(os.path.join(class_dir, f'img_{img_num}.jpg'), frame)
         cv2.waitKey(DELAY_BETWEEN_CLASSES) # small delay to avoid duplicates
         key = cv2.waitKey(1) & 0xFF
@@ -84,5 +91,3 @@ for class_id in range(NUM_CLASSES):
 cap.release()
 cv2.destroyAllWindows() 
 print("Data collection complete!")
-
-
