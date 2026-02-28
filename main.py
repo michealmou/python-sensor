@@ -6,10 +6,11 @@ import numpy as np
 from hand_detector import HandDetector
 from utils.drawing_utils import draw_hand_points, draw_bounding_box, draw_hand_skeleton
 from mouse_controller import MouseController
+from config import max_hands, detection_confidence, tracking_confidence, alpha, frameR, CAM_WIDTH, CAM_HEIGHT   
 
 # Initialize MouseController
 if MouseController:
-    mouse = MouseController(alpha=0.3)
+    mouse = MouseController(alpha)
 
 else:
     mouse = None
@@ -18,14 +19,14 @@ else:
 frameR = 150
 
 # Initialize hand detector
-detector = HandDetector(max_hands=2, detection_confidence=0.7, tracking_confidence=0.5)
+detector = HandDetector(max_hands, detection_confidence, tracking_confidence)
 
 # Initialize webcam (0 = default camera)
 cap = cv2.VideoCapture(0)
 
 # Set frame dimensions
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
 
 # Check if camera opened successfully
 if not cap.isOpened():
