@@ -1,10 +1,14 @@
 # hand detector file
 import cv2
 import mediapipe as mp
-from config import max_hands, detection_confidence, tracking_confidence
+from config import(
+    MAX_HANDS,
+    DETECTION_CONFIDENCE,
+    TRACKING_CONFIDENCE
+)
 
 class HandDetector:
-    def __init__(self, max_hands, detection_confidence, tracking_confidence):
+    def __init__(self, max_hands=MAX_HANDS, detection_confidence=DETECTION_CONFIDENCE, tracking_confidence=TRACKING_CONFIDENCE):
         self.mp_hands = mp.solutions.hands
         self.mp_drawing = mp.solutions.drawing_utils
         self.hands = self.mp_hands.Hands(
