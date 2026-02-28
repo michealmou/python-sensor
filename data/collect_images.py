@@ -66,8 +66,6 @@ for class_id in range(NUM_CLASSES):
             cv2.destroyAllWindows()
             sys.exit(0)
 
-
-
     # Collect images
     for img_num in range(IMAGES_PER_CLASS):
         ret, frame = cap.read()
@@ -87,6 +85,7 @@ for class_id in range(NUM_CLASSES):
             cap.release()
             cv2.destroyAllWindows()
             sys.exit(0)
+
 #clean up
 cap.release()
 cv2.destroyAllWindows() 

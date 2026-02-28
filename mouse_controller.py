@@ -1,5 +1,14 @@
 import time
+import math
+import cv2
+import numpy as np
 import pyautogui
+from utils.drawing_utils import draw_hand_points, draw_hand_skeleton
+from config import (
+    CAM_WIDTH, CAM_HEIGHT, FRAME_REDUCTION,
+    PINCH_DISTANCE, SCROLL_JITTER_THRESHOLD, SCROLL_SPEED_MULTIPLIER,
+    CLICK_COOLDOWN, FINGER_CIRCLE_RADIUS,
+)
 
 # Make pyautogui fast (VERY important)
 pyautogui.PAUSE = 0
@@ -29,6 +38,69 @@ class MouseController:
         # Timing (prevents FPS drops)
         self.move_interval = move_interval
         self.last_move_time = 0
+
+        # Scroll tracking state
+        self.prev_y1 = 0
+
+    def process_frame(self, frame, hand, detector):
+        """Process one frame in mouse-control mode."""
+        positions = hand["positions"]
+        hand_landmarks = hand["landmarks"]
+
+        # Draw visuals
+        draw_hand_points(frame, positions)
+        draw_hand_skeleton(frame, hand_landmarks, detector.mp_hands, detector.mp_drawing)
+
+        if not positions:
+            return
+
+        # Extract landmarks
+        x1, y1 = positions[8][1], positions[8][2]    # Index Finger Tip
+        x2, y2 = positions[4][1], positions[4][2]    # Thumb Tip
+        x3, y3 = positions[12][1], positions[12][2]  # Middle Finger Tip
+        x4, y4 = positions[16][1], positions[16][2]  # Ring Finger Tip
+
+        # Check scroll gesture (Thumb + Ring) first
+        dist_scroll = math.hypot(x2 - x4, y2 - y4)
+
+        if dist_scroll < PINCH_DISTANCE:
+            # SCROLL MODE
+            cv2.circle(frame, (x4, y4), FINGER_CIRCLE_RADIUS, (255, 255, 0), cv2.FILLED)
+
+            if self.prev_y1 == 0:
+                self.prev_y1 = y1
+            delta_y = y1 - self.prev_y1
+
+            if abs(delta_y) > SCROLL_JITTER_THRESHOLD:
+                scroll_amount = int(-delta_y * SCROLL_SPEED_MULTIPLIER)
+                self.scroll(scroll_amount)
+
+        else:
+            # NORMAL MOUSE MODE (Move + Click)
+            cv2.circle(frame, (x1, y1), FINGER_CIRCLE_RADIUS, (255, 0, 255), cv2.FILLED)
+            cv2.circle(frame, (x2, y2), FINGER_CIRCLE_RADIUS, (255, 0, 255), cv2.FILLED)
+
+            # Move mouse
+            x_screen = np.interp(x1, (FRAME_REDUCTION, CAM_WIDTH - FRAME_REDUCTION), (0, self.screen_w))
+            y_screen = np.interp(y1, (FRAME_REDUCTION, CAM_HEIGHT - FRAME_REDUCTION), (0, self.screen_h))
+            self.move(x_screen, y_screen)
+
+            # Left click (Thumb + Index)
+            distance = math.hypot(x2 - x1, y2 - y1)
+            if distance < PINCH_DISTANCE:
+                cv2.circle(frame, (x1, y1), FINGER_CIRCLE_RADIUS, (0, 255, 0), cv2.FILLED)
+                self.click('left')
+                time.sleep(CLICK_COOLDOWN)
+
+            # Right click (Thumb + Middle)
+            distance_right = math.hypot(x2 - x3, y2 - y3)
+            if distance_right < PINCH_DISTANCE:
+                cv2.circle(frame, (x3, y3), FINGER_CIRCLE_RADIUS, (0, 0, 255), cv2.FILLED)
+                self.click('right')
+                time.sleep(CLICK_COOLDOWN)
+
+        # Update previous y1 for next frame
+        self.prev_y1 = y1
 
     def move(self, x, y):
         """Move mouse smoothly to (x, y)"""

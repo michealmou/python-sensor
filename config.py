@@ -1,10 +1,3 @@
-"""
-config.py — Centralized configuration constants.
-
-All tunable parameters live here. Do NOT put runtime state
-variables (counters, accumulators, etc.) in this file.
-"""
-
 # ── Camera ────────────────────────────────────────────
 CAMERA_INDEX = 0              # Default webcam index
 CAM_WIDTH = 1280              # Capture width
