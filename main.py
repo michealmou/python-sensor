@@ -1,8 +1,8 @@
 import cv2
 import time
-from hand_detector import HandDetector
-from mouse_controller import MouseController
-from sign_language_controller import SignLanguageController
+from core.hand_detector import HandDetector
+from controllers.mouse_controller import MouseController
+from controllers.sign_language_controller import SignLanguageController
 from config import (
     CAMERA_INDEX, CAM_WIDTH, CAM_HEIGHT,
     MAX_HANDS, DETECTION_CONFIDENCE, TRACKING_CONFIDENCE,

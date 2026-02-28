@@ -1,3 +1,5 @@
 # folders
 /data/raw
 __pycache__/
+models/saved/
+.env
