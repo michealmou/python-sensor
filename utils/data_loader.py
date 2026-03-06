@@ -2,6 +2,7 @@ import pickle
 import os
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 from config import BASE_DIR
 
 def load_landmark_data(test_size=0.2, random_state=42):
@@ -18,8 +19,14 @@ def load_landmark_data(test_size=0.2, random_state=42):
     X = np.array(dataset["data"])
     y = np.array(dataset["labels"])
 
+    # Encode strigns lables to integers
+    le = LabelEncoder()
+    y_encoded = le.fit_transform(y)
+
+    label_map = {i: str(label) for i, label in enumerate(le.classes_)}
+
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
+        X, y_encoded, test_size=test_size, random_state=random_state, stratify=y_encoded
     )
 
-    return X_train, X_test, y_train, y_test
+    return X_train, X_test, y_train, y_test, label_map

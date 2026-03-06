@@ -6,7 +6,7 @@ from sklearn.metrics import accuracy_score
 from utils.data_loader import load_landmark_data
 from config import BASE_DIR
 
-X_train, X_test, y_train, y_test = load_landmark_data()
+X_train, X_test, y_train, y_test, label_map = load_landmark_data()
 
 model = RandomForestClassifier(n_estimators=100, random_state=42).fit(X_train, y_train)
 y_pred = model.predict(X_test)
@@ -18,6 +18,13 @@ print(f"Test Accuracy: {accuracy:.2f}")
 model_dir = os.path.join(BASE_DIR, "models", "saved")
 os.makedirs(model_dir, exist_ok=True)
 model_path = os.path.join(model_dir, "model_rf.p")
+
+# Save label map
+label_map_path = os.path.join(model_dir, "labels.pickle")
+with open(label_map_path, "wb") as f:
+    pickle.dump(label_map, f)
+
+print(f"Label map saved to {label_map_path}")
 
 with open(model_path, "wb") as f:
     pickle.dump(model, f)

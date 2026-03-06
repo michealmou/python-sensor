@@ -6,7 +6,7 @@ from sklearn.metrics import accuracy_score
 from utils.data_loader import load_landmark_data
 from config import BASE_DIR, RF_PARAM_GRID, CV_FOLDS
 
-X_train, X_test, y_train, y_test = load_landmark_data()
+X_train, X_test, y_train, y_test, label_map = load_landmark_data()
 
 rf = RandomForestClassifier(random_state=42)
 grid_search = GridSearchCV(
@@ -47,6 +47,13 @@ print(f"\nTest Set Accuracy (best model): {test_accuracy:.4f}")
 model_dir = os.path.join(BASE_DIR, "models", "saved")
 os.makedirs(model_dir, exist_ok=True)
 model_path = os.path.join(model_dir, "model_rf_tuned.p")
+
+# Save label map
+label_map_path = os.path.join(model_dir, "labels.pickle")
+with open(label_map_path, "wb") as f:
+    pickle.dump(label_map, f)
+
+print(f"Label map saved to {label_map_path}")
 
 with open(model_path, "wb") as f:
     pickle.dump(best_model, f)
