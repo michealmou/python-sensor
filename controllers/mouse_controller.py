@@ -8,6 +8,7 @@ from config import (
     CAM_WIDTH, CAM_HEIGHT, FRAME_REDUCTION,
     PINCH_DISTANCE, SCROLL_JITTER_THRESHOLD, SCROLL_SPEED_MULTIPLIER,
     CLICK_COOLDOWN, FINGER_CIRCLE_RADIUS,
+    COLOR_PRIMARY, COLOR_SECONDARY, COLOR_ACCENT, COLOR_DANGER
 )
 
 # Make pyautogui fast (VERY important)
@@ -65,7 +66,7 @@ class MouseController:
 
         if dist_scroll < PINCH_DISTANCE:
             # SCROLL MODE
-            cv2.circle(frame, (x4, y4), FINGER_CIRCLE_RADIUS, (255, 255, 0), cv2.FILLED)
+            cv2.circle(frame, (x4, y4), FINGER_CIRCLE_RADIUS, COLOR_ACCENT, cv2.FILLED)
 
             if self.prev_y1 == 0:
                 self.prev_y1 = y1
@@ -77,8 +78,8 @@ class MouseController:
 
         else:
             # NORMAL MOUSE MODE (Move + Click)
-            cv2.circle(frame, (x1, y1), FINGER_CIRCLE_RADIUS, (255, 0, 255), cv2.FILLED)
-            cv2.circle(frame, (x2, y2), FINGER_CIRCLE_RADIUS, (255, 0, 255), cv2.FILLED)
+            cv2.circle(frame, (x1, y1), FINGER_CIRCLE_RADIUS, COLOR_SECONDARY, cv2.FILLED)
+            cv2.circle(frame, (x2, y2), FINGER_CIRCLE_RADIUS, COLOR_SECONDARY, cv2.FILLED)
 
             # Move mouse
             x_screen = np.interp(x1, (FRAME_REDUCTION, CAM_WIDTH - FRAME_REDUCTION), (0, self.screen_w))
@@ -88,14 +89,14 @@ class MouseController:
             # Left click (Thumb + Index)
             distance = math.hypot(x2 - x1, y2 - y1)
             if distance < PINCH_DISTANCE:
-                cv2.circle(frame, (x1, y1), FINGER_CIRCLE_RADIUS, (0, 255, 0), cv2.FILLED)
+                cv2.circle(frame, (x1, y1), FINGER_CIRCLE_RADIUS, COLOR_PRIMARY, cv2.FILLED)
                 self.click('left')
                 time.sleep(CLICK_COOLDOWN)
 
             # Right click (Thumb + Middle)
             distance_right = math.hypot(x2 - x3, y2 - y3)
             if distance_right < PINCH_DISTANCE:
-                cv2.circle(frame, (x3, y3), FINGER_CIRCLE_RADIUS, (0, 0, 255), cv2.FILLED)
+                cv2.circle(frame, (x3, y3), FINGER_CIRCLE_RADIUS, COLOR_DANGER, cv2.FILLED)
                 self.click('right')
                 time.sleep(CLICK_COOLDOWN)
 

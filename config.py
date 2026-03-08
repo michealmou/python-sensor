@@ -64,3 +64,16 @@ CV_FOLDS = 5
 # ── Prediction Smoothing ─────────────────────────────
 SMOOTHING_WINDOW_SIZE = 15       # Number of recent predictions to keep
 SMOOTHING_DOMINANCE_THRESHOLD = 0.6  # 60% dominance required to update display
+
+# ── UI Colors (BGR Format) ────────────────────────────
+COLOR_PRIMARY = (0, 255, 0)       # Green (Text, Left Click)
+COLOR_SECONDARY = (255, 0, 255)   # Magenta (Mouse tracking)
+COLOR_ACCENT = (255, 255, 0)      # Cyan (Scroll tracking)
+COLOR_WARNING = (0, 220, 255)     # Yellow (Medium confidence)
+COLOR_DANGER = (0, 0, 220)        # Red (Low confidence / Right click)
+COLOR_WHITE = (255, 255, 255)     # White text
+COLOR_BLACK_BG = (50, 50, 50)     # Gray background bars
+
+# ── Prediction Confidence Thresholds ──────────────────
+CONFIDENCE_HIGH = 0.8             # Threshold for green prediction UI
+CONFIDENCE_MEDIUM = 0.5           # Threshold for yellow prediction UI

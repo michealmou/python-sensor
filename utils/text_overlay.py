@@ -1,13 +1,16 @@
-import cv2
+from config import (
+    COLOR_PRIMARY, COLOR_WARNING, COLOR_DANGER, COLOR_BLACK_BG,
+    CONFIDENCE_HIGH, CONFIDENCE_MEDIUM
+)
 
 def draw_prediction(frame, label, confidence, position="top-right"):
     
-    if confidence > 0.8:
-        color = (0, 200, 0)      # green
-    elif confidence >= 0.5:       # implicitly <= 0.8 because of the if above
-        color = (0, 220, 255)     # yellow
-    else:                         # < 0.5
-        color = (0, 0, 220)       # red
+    if confidence >= CONFIDENCE_HIGH:
+        color = COLOR_PRIMARY      # green
+    elif confidence >= CONFIDENCE_MEDIUM:       # implicitly < CONFIDENCE_HIGH because of the if above
+        color = COLOR_WARNING      # yellow
+    else:                          # < CONFIDENCE_MEDIUM
+        color = COLOR_DANGER       # red
     
     # h = height in pixels (e.g., 720)
     # w = width in pixels  (e.g., 1280)
@@ -50,7 +53,7 @@ def draw_prediction(frame, label, confidence, position="top-right"):
     cv2.putText(frame, f"{int(confidence * 100)}%", (text_x, text_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
 
     # Gray background bar
-    cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_max_width, bar_y + bar_height), (50, 50, 50), cv2.FILLED)
+    cv2.rectangle(frame, (bar_x, bar_y), (bar_x + bar_max_width, bar_y + bar_height), COLOR_BLACK_BG, cv2.FILLED)
     
     # Colored fill bar
     fill_width = int(bar_max_width * confidence)

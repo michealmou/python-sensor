@@ -3,7 +3,9 @@ import mediapipe as mp
 from config import(
     MAX_HANDS,
     DETECTION_CONFIDENCE,
-    TRACKING_CONFIDENCE
+    TRACKING_CONFIDENCE,
+    COLOR_PRIMARY,
+    COLOR_WHITE
 )
 
 class HandDetector:
@@ -51,14 +53,14 @@ class HandDetector:
                     frame,
                     hand['landmarks'],
                     self.mp_hands.HAND_CONNECTIONS,
-                    self.mp_drawing.DrawingSpec(color=(0,255,0), thickness=2, circle_radius=2),
-                    self.mp_drawing.DrawingSpec(color=(255,0,0), thickness=2)
+                    self.mp_drawing.DrawingSpec(color=COLOR_PRIMARY, thickness=2, circle_radius=2),
+                    self.mp_drawing.DrawingSpec(color=COLOR_WHITE, thickness=2)
                 )
                 #draw label
                 if hand['positions']:
                     #wrist is landmark 0
                     wrist_x, wrist_y = hand['positions'][0][1], hand['positions'][0][2]
                     cv2.putText(frame, hand['label'], (wrist_x - 10, wrist_y - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2)
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, COLOR_WHITE, 2)
                 return frame
         return hands_data

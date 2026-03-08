@@ -3,6 +3,10 @@ Quick test of SignClassifier without needing webcam/hand detector.
 Tests the exact flow used in main.py.
 """
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
 import numpy as np
 from dataclasses import dataclass
 from core.sign_classifier import SignClassifier

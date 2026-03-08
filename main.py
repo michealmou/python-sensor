@@ -1,5 +1,7 @@
 import cv2
 import time
+import sys
+
 from core.sign_classifier import SignClassifier
 from core.hand_detector import HandDetector
 from utils.text_overlay import draw_prediction
@@ -11,123 +13,131 @@ from config import (
     CAMERA_INDEX, CAM_WIDTH, CAM_HEIGHT,
     MAX_HANDS, DETECTION_CONFIDENCE, TRACKING_CONFIDENCE,
     SMOOTHING_ALPHA, WINDOW_TITLE,
-    SMOOTHING_WINDOW_SIZE, SMOOTHING_DOMINANCE_THRESHOLD
+    SMOOTHING_WINDOW_SIZE, SMOOTHING_DOMINANCE_THRESHOLD,
+    COLOR_PRIMARY
 )
 
-# Initialize controllers
-controllers = {
-    "mouse": MouseController(alpha=SMOOTHING_ALPHA),
-    "sign_language": SignLanguageController(),
-}
+class ChironaApp:
+    def __init__(self):
+        self._setup()
+        
+    def _setup(self):
+        """Initialize models, controllers, and hardware."""
+        self.controllers = {
+            "mouse": MouseController(alpha=SMOOTHING_ALPHA),
+            "sign_language": SignLanguageController(),
+        }
+        
+        # Initialize hand detector (start in single hand mode)
+        self.detector = HandDetector(1, DETECTION_CONFIDENCE, TRACKING_CONFIDENCE)
+        self.fe = FeatureExtractor(use_z=False)  # Must match training config
+        
+        # Load trained sign language model
+        try:
+            self.classifier = SignClassifier('models/trained_model.pkl')
+        except FileNotFoundError:
+            print("Trained model not found. Please run 'train_model.py' first to create the model file.")
+            self.classifier = None
+            
+        # Initialize webcam
+        self.cap = cv2.VideoCapture(CAMERA_INDEX)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
+        
+        if not self.cap.isOpened():
+            print("Failed to open camera")
+            sys.exit(1)
+            
+        # Runtime state variables
+        self.prev_time = 0
+        self.mode = "mouse"
+        self.max_hands_mode = 1 # start with single hand mode
+        
+        self.smoother = PredictionSmoother(
+            window_size=SMOOTHING_WINDOW_SIZE, 
+            dominance_threshold=SMOOTHING_DOMINANCE_THRESHOLD
+        )
+        self.displayed_sign = None
+        self.displayed_confidence = None
 
-# Initialize hand detector (start in single hand mode)
-detector = HandDetector(1, DETECTION_CONFIDENCE, TRACKING_CONFIDENCE)
-
-fe = FeatureExtractor(use_z=False)  # Must match training config
-
-# Load trained model
-try:
-    classifier = SignClassifier('models/trained_model.pkl')
-except FileNotFoundError:
-    print("Trained model not found. Please run 'train_model.py' first to create the model file.")
-    classifier = None
-
-# Initialize webcam
-cap = cv2.VideoCapture(CAMERA_INDEX)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
-
-# Check if camera opened successfully
-if not cap.isOpened():
-    print("Failed to open camera")
-    exit()
-
-# Runtime state
-prev_time = 0
-mode = "mouse"
-
-# hand detection mode toggle
-max_hands_mode = 1 #start with single hand mode
-
-# Initialize prediction smoother
-smoother = PredictionSmoother(window_size=SMOOTHING_WINDOW_SIZE, dominance_threshold=SMOOTHING_DOMINANCE_THRESHOLD)
-displayed_sign = None
-displayed_confidence = None
-
-# Main loop
-while True:
-    success, frame = cap.read()
-    if not success:
-        print("Failed to read frame")
-        break
-
-    frame = cv2.flip(frame, 1)
-    hands_data = detector.detect(frame)
-
-
-    # Process first detected hand with the active controller
-    if hands_data:
-        controllers[mode].process_frame(frame, hands_data[0], detector)
-        hand = hands_data[0]
+    def _process_prediction(self, hand):
+        """Extract features, predict gesture, and smooth the output for the UI."""
         landmarks = hand['landmarks']
-
+        
         # Extract and normalize features
-        features = fe.extract(landmarks)
-        normalized_features = fe.normalize(features)
+        features = self.fe.extract(landmarks)
+        normalized_features = self.fe.normalize(features)
 
         # Predict gesture
-        if classifier is not None:
-            label, confidence = classifier.predict(normalized_features)
-            smoother.add_prediction(label)
-            stable = smoother.get_stable()
+        if self.classifier is not None:
+            label, confidence = self.classifier.predict(normalized_features)
+            self.smoother.add_prediction(label)
+            stable = self.smoother.get_stable()
 
             # Update displayed sign if stable prediction is available
             if stable is not None:
-                displayed_sign = stable
-                displayed_confidence = confidence
+                self.displayed_sign = stable
+                self.displayed_confidence = confidence
 
-    # Calculate FPS
-    current_time = time.time()
-    fps = 1 / (current_time - prev_time) if prev_time > 0 else 0
-    prev_time = current_time
+    def _handle_keypress(self):
+        """Handle keyboard input. Returns False if app should exit."""
+        key = cv2.waitKey(1) & 0xFF
+        
+        # Toggle control modes 
+        if key == ord('m'):
+            self.mode = "sign_language" if self.mode == "mouse" else "mouse"
+            
+        # Exit on Escape key or window close
+        if key == 27 or cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
+            return False
+            
+        return True
 
-    # Display FPS and mode
-    cv2.putText(frame, f'FPS: {int(fps)}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    cv2.putText(frame, f'Hands: {max_hands_mode}', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    cv2.putText(frame, f'Mode: {mode}', (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    def run(self):
+        """Main application runtime loop."""
+        while True:
+            success, frame = self.cap.read()
+            if not success:
+                print("Failed to read frame")
+                break
 
-    # Display sign if available
-    if displayed_sign and displayed_confidence:
-        draw_prediction(frame, displayed_sign, displayed_confidence)
+            frame = cv2.flip(frame, 1)
+            hands_data = self.detector.detect(frame)
 
-    cv2.imshow(WINDOW_TITLE, frame)
+            # Process first detected hand with the active controller
+            if hands_data:
+                first_hand = hands_data[0]
+                self.controllers[self.mode].process_frame(frame, first_hand, self.detector)
+                self._process_prediction(first_hand)
 
-    # Handle keypresses
-    """
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord('m'):
-        mode = "sign_language" if mode == "mouse" else "mouse"
-    if key == 27 or cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
-        break
-    """
-    
-    key = cv2.waitKey(1) & 0xFF
-    
-    if key == ord('m'):
-        mode = "sign_language" if mode == "mouse" else "mouse"
-    """
-    # making the code raedy for future changes regarding translating of 2 hands signing
-    if key == ord('1'):
-        max_hands_mode = 1
-        detector.hands.max_num_hands = 1
-        print('Hand detection mode: 1 hand')
-    if key == ord('2'):
-        max_hands_mode = 2
-        detector.hands.max_num_hands = 2
-        print('Hand detection mode: 2 hands')
-    """
-    if key == 27 or cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
-        break
+            # Calculate FPS
+            current_time = time.time()
+            fps = 1 / (current_time - self.prev_time) if self.prev_time > 0 else 0
+            self.prev_time = current_time
 
-cap.release()
-cv2.destroyAllWindows()
+            # Display info text overlays
+            cv2.putText(frame, f'FPS: {int(fps)}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, COLOR_PRIMARY, 2)
+            cv2.putText(frame, f'Hands: {self.max_hands_mode}', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, COLOR_PRIMARY, 2)
+            cv2.putText(frame, f'Mode: {self.mode}', (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, COLOR_PRIMARY, 2)
+
+            # Display predicted sign bar if available
+            if self.displayed_sign and self.displayed_confidence:
+                draw_prediction(frame, self.displayed_sign, self.displayed_confidence)
+
+            cv2.imshow(WINDOW_TITLE, frame)
+
+            # Break loop if _handle_keypress asks to exit
+            if not self._handle_keypress():
+                break
+
+        self.cleanup()
+
+    def cleanup(self):
+        """Release resources."""
+        self.cap.release()
+        cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    app = ChironaApp()
+    app.run()
