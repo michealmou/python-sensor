@@ -1,7 +1,7 @@
-import pickle
-import numpy as np
-import logging
 import os
+import pickle
+import logging
+import numpy as np
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -208,9 +208,9 @@ if __name__ == "__main__":
         print("\nTEST 1: Loading from missing path...")
         try:
             clf = SignClassifier("nonexistent/model.pkl")
-            print("  ✗ FAILED: Should have raised FileNotFoundError")
+            print("  [FAIL] FAILED: Should have raised FileNotFoundError")
         except FileNotFoundError as e:
-            print("  ✓ PASSED: FileNotFoundError raised as expected")
+            print("  [OK] PASSED: FileNotFoundError raised as expected")
     
     # TEST 2: Valid model loading
     def test_init_with_valid_model():
@@ -220,10 +220,10 @@ if __name__ == "__main__":
             clf = SignClassifier("models/trained_model.pkl")
             assert clf.model is not None, "Model should be loaded"
             assert clf.classes_ is not None, "Classes should be set"
-            print("  ✓ PASSED: Model loaded successfully")
+            print("  [OK] PASSED: Model loaded successfully")
             print(f"  Found {len(clf.classes_)} gesture classes")
         except FileNotFoundError:
-            print("  ⚠ SKIPPED: No trained model found yet")
+            print("  [WARN] SKIPPED: No trained model found yet")
             print("    Run: python models/mockmodel.py")
     
     # TEST 3: Valid prediction
@@ -244,10 +244,10 @@ if __name__ == "__main__":
             assert isinstance(confidence, float), "Confidence should be float"
             assert 0.0 <= confidence <= 1.0, "Confidence should be 0.0-1.0"
             
-            print("  ✓ PASSED: predict() returned valid results")
+            print("  [OK] PASSED: predict() returned valid results")
             print(f"  Predicted: {label} with {confidence:.1%} confidence")
         except FileNotFoundError:
-            print("  ⚠ SKIPPED: No trained model found yet")
+            print("  [WARN] SKIPPED: No trained model found yet")
     
     # TEST 4: Invalid shape rejection
     def test_predict_with_invalid_shape():
@@ -261,11 +261,11 @@ if __name__ == "__main__":
             
             try:
                 clf.predict(bad_features)
-                print("  ✗ FAILED: Should have raised ValueError")
+                print("  [FAIL] FAILED: Should have raised ValueError")
             except ValueError as e:
-                print("  ✓ PASSED: ValueError raised for wrong shape")
+                print("  [OK] PASSED: ValueError raised for wrong shape")
         except FileNotFoundError:
-            print("  ⚠ SKIPPED: No trained model found yet")
+            print("  [WARN] SKIPPED: No trained model found yet")
     
     # TEST 5: Batch prediction
     def test_predict_batch():
@@ -281,11 +281,11 @@ if __name__ == "__main__":
             assert len(results) == 5, "Should return 5 results"
             assert all(isinstance(r, tuple) and len(r) == 2 for r in results)
             
-            print("  ✓ PASSED: Batch prediction works")
+            print("  [OK] PASSED: Batch prediction works")
             for i, (label, conf) in enumerate(results):
                 print(f"    Sample {i}: {label} ({conf:.1%})")
         except FileNotFoundError:
-            print("  ⚠ SKIPPED: No trained model found yet")
+            print("  [WARN] SKIPPED: No trained model found yet")
     
     # RUN ALL TESTS
     test_init_with_missing_model()

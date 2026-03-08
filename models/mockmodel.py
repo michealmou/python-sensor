@@ -20,6 +20,6 @@ os.makedirs("models", exist_ok=True)
 with open("models/trained_model.pkl", "wb") as f:
     pickle.dump(model, f)
     
-print("✓ Mock model saved to models/trained_model.pkl")
+print("[OK] Mock model saved to models/trained_model.pkl")
 print(f"  Model has {len(model.classes_)} classes: {list(model.classes_)}")
 print("\nNow you can test with: python core/sign_classifier.py")

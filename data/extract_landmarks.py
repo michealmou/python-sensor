@@ -1,8 +1,6 @@
 # landmark extraction script
 
 import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 import cv2
 import mediapipe as mp
 import numpy as np 
@@ -11,9 +9,6 @@ from pathlib import Path
 import logging
 from core.sign_classifier import SignClassifier
 from core.feature_extractor import FeatureExtractor
-
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-
 from core.hand_detector import HandDetector
 from core.feature_extractor import FeatureExtractor
 from config import (
@@ -21,6 +16,9 @@ from config import (
     DETECTION_CONFIDENCE,
     TRACKING_CONFIDENCE
 )
+
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 def extract_landmarks_batch(
         raw_data_dir="./data/raw",
@@ -115,7 +113,7 @@ def extract_landmarks_batch(
     with open(output_path, "wb") as f:
         pickle.dump(output_dict, f)
     
-    logging.info("✓ Saved successfully!")
+    logging.info("[OK] Saved successfully!")
     logging.info("=" * 50)
     logging.info(f"Total images: {total_images}")
     logging.info(f"Successful: {successful}")
@@ -126,15 +124,4 @@ def extract_landmarks_batch(
 
 if __name__ == "__main__":
     extract_landmarks_batch()
-    print("\n✓ Landmark extraction completed!")
-
-clf = SignClassifier('models/trained_model.pkl')
-
-for features in feature_batch:
-    label, confidence = clf.predict(features)
-    results.append({
-        'features': features,
-        'predicted_label': label,
-        'confidence': confidence
-    })
-    
+    print("\n[OK] Landmark extraction completed!")
