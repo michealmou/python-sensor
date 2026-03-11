@@ -114,7 +114,7 @@ pytest tests/
 
 ## 🗺️ Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the full development plan. Current progress:
+See [ROADMAP.md](docs/ROADMAP.md) for the full development plan. Current progress:
 
 - [x] Project restructure & modular architecture
 - [x] Data collection pipeline
