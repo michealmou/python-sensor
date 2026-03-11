@@ -1,7 +1,7 @@
 # 🤟 Chirona
 **Real-time Sign Language Interpreter using Computer Vision & Machine Learning**
 
-A Python application that uses MediaPipe, OpenCV, and scikit-learn to detect hands in real-time, extract landmark features, and classify ASL (American Sign Language) signs. It also doubles as a gesture-based mouse controller.
+A Python application that uses MediaPipe, OpenCV, and scikit-learn to detect hands in real-time, extract landmark features, and classify ASL (American Sign Language) signs.
 
 ---
 
@@ -9,7 +9,7 @@ A Python application that uses MediaPipe, OpenCV, and scikit-learn to detect han
 
 - 🖐️ **Real-time Hand Detection** — Tracks up to 2 hands simultaneously using MediaPipe's 21-point landmark model
 - 🔤 **ASL Sign Classification** — Recognizes static ASL alphabet signs (A–Z, excluding J and Z) via a trained RandomForest classifier
-- 🖱️ **Gesture Mouse Control** — Move, click, right-click, and scroll using hand gestures
+- 📝 **Sentence Building** — Accumulate sign letters into words and sentences with a hold-to-confirm mechanism
 - 📊 **Prediction Smoothing** — Sliding-window voting system prevents flickering sign displays
 - 🎯 **Confidence Display** — Color-coded prediction overlay with confidence bar (green / yellow / red)
 - 📸 **Data Collection Pipeline** — Built-in webcam script to capture sign images with countdown timer
@@ -26,7 +26,6 @@ A Python application that uses MediaPipe, OpenCV, and scikit-learn to detect han
 | **Computer Vision** | OpenCV ≥ 4.8, MediaPipe ≥ 0.10 |
 | **Machine Learning** | scikit-learn ≥ 1.3 (RandomForest, GridSearchCV) |
 | **Numerical** | NumPy ≥ 1.24 |
-| **Mouse Control** | PyAutoGUI |
 | **Visualization** | Matplotlib, Seaborn |
 | **Language** | Python 3.9–3.11 |
 
@@ -34,8 +33,7 @@ A Python application that uses MediaPipe, OpenCV, and scikit-learn to detect han
 
 ```text
 chirona/
-├── core/                # Core ML & detection logic (classifiers, extractors)
-├── controllers/         # Application modes (mouse control, sign language)
+├── core/                # Core ML & detection logic (classifiers, extractors, gesture detection)
 ├── utils/               # Shared utilities (drawing, smoothing, text overlay)
 ├── data/                # Data collection, extraction, and dataset loaders
 ├── models/              # Training, evaluation scripts, and saved weights
@@ -95,17 +93,18 @@ python main.py
 
 | Key | Action |
 |-----|--------|
-| `M` | Toggle between Mouse Control and Sign Language mode |
+| `SPACE` | Manually add a space to the sentence |
+| `H` | Toggle between 1 and 2 hand modes |
 | `ESC` | Exit the application |
 
-### Gesture Mouse Controls
+### Sentence Builder Gestures
 
-| Gesture | Action |
+| Action | Function |
 |---------|--------|
-| ☝️ Index finger | Move cursor |
-| 🤏 Thumb + Index pinch | Left click |
-| 🤏 Thumb + Middle pinch | Right click |
-| 🤏 Thumb + Ring pinch | Scroll mode |
+| `speak` | Text-to-speech output of the current sentence |
+| `space` | Add a space in sentence builder |
+| `backspace` | Remove the last character |
+| `clear` | Clear the current sentence |
 
 ## 🧪 Running Tests
 
@@ -126,8 +125,8 @@ See [ROADMAP.md](ROADMAP.md) for the full development plan. Current progress:
 - [x] Prediction smoothing (anti-flicker)
 - [x] Data augmentation utilities
 - [x] ASL MNIST dataset support
-- [ ] Text-to-speech output
-- [ ] Sentence building from individual signs
+- [x] Text-to-speech output
+- [x] Sentence building from individual signs
 - [ ] Dynamic gesture recognition (LSTM)
 - [ ] Desktop GUI (PyQt5)
 - [ ] Web-based version (Flask/FastAPI)
