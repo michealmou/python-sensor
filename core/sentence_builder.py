@@ -12,8 +12,10 @@ class SentenceBuilder:
         self.sentence = ""
         self.history = []  # Keep track of recent predictions for smoothing
         self.current_sign = None
+        self.last_confirmed_sign = None
         self.start_time = 0.0
         self.confirm_duration = CONFIRM_DURATION
+
     def add_letter(self, letter):
         '''Adds a letter to the current word.'''
         self.current_word += letter
@@ -21,16 +23,21 @@ class SentenceBuilder:
     def update(self, sign, timestamp):
         if not sign:
             self.current_sign = None
+            self.last_confirmed_sign = None
             self.start_time = 0.0
             return
             
-        if sign != self.current_sign:
-            self.current_sign = sign
-            self.start_time = timestamp
-        elif timestamp - self.start_time >= self.confirm_duration:
-            self.current_word += sign
-            self.current_sign = None
-            self.start_time = 0.0
+        # Reset confirmed sign if they switch to a different sign
+        if sign != self.last_confirmed_sign:
+            # Only start tracking a new sign if it's different from the current one
+            if sign != self.current_sign:
+                self.current_sign = sign
+                self.start_time = timestamp
+            elif timestamp - self.start_time >= self.confirm_duration:
+                self.current_word += sign
+                self.last_confirmed_sign = sign
+                self.current_sign = None
+                self.start_time = 0.0
 
     def add_space(self):
         """Moves current_word to sentence with a space."""

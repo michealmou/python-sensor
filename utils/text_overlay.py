@@ -132,11 +132,39 @@ def draw_sentence_builder_ui(frame, sentence_builder, current_time):
     if sentence_text:
         sent_scale = 1.0
         sent_thickness = 2
-        sent_size = cv2.getTextSize(sentence_text, cv2.FONT_HERSHEY_SIMPLEX, sent_scale, sent_thickness)[0]
-        sent_x = (w - sent_size[0]) // 2
+        
+        # Max width to prevent overlapping with prediction UI (which is 250px wide + padding)
+        # We leave a safe margin
+        max_width = w - 600 
+        
+        # Split text into lines that fit within max_width
+        words = sentence_text.split(' ')
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            if not word: continue
+            test_line = current_line + " " + word if current_line else word
+            test_size = cv2.getTextSize(test_line, cv2.FONT_HERSHEY_SIMPLEX, sent_scale, sent_thickness)[0]
+            
+            if test_size[0] <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+            
         sent_y = top_y + 50
-        # Draw sentence block (with black outline for readability)
-        cv2.putText(frame, sentence_text, (sent_x, sent_y), cv2.FONT_HERSHEY_SIMPLEX, sent_scale, (0, 0, 0), sent_thickness + 2)
-        cv2.putText(frame, sentence_text, (sent_x, sent_y), cv2.FONT_HERSHEY_SIMPLEX, sent_scale, COLOR_PRIMARY, sent_thickness)
+        line_spacing = 40
+        
+        for line in lines:
+            if not line: continue
+            sent_size = cv2.getTextSize(line, cv2.FONT_HERSHEY_SIMPLEX, sent_scale, sent_thickness)[0]
+            sent_x = (w - sent_size[0]) // 2
+            # Draw sentence block (with black outline for readability)
+            cv2.putText(frame, line, (sent_x, sent_y), cv2.FONT_HERSHEY_SIMPLEX, sent_scale, (0, 0, 0), sent_thickness + 2)
+            cv2.putText(frame, line, (sent_x, sent_y), cv2.FONT_HERSHEY_SIMPLEX, sent_scale, COLOR_PRIMARY, sent_thickness)
+            sent_y += line_spacing
 
     return frame
