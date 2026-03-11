@@ -1,0 +1,734 @@
+================================================================================
+STEP-BY-STEP GUIDE: Hand Gesture Controls for Sentence Builder
+================================================================================
+
+Feature: Add special hand gestures to control sentence building without keyboard
+- Space detection (open palm)
+- Backspace detection (fist)
+- Speak trigger (thumbs up)
+- Clear sentence (two palms)
+
+Status: Design & Implementation Guide
+Created: March 10, 2026
+
+
+================================================================================
+PART 1: UNDERSTANDING THE FEATURE
+================================================================================
+
+Current State:
+  - ASL signs are detected (A-Z)
+  - Signs are classified with confidence scores
+  - Signs are displayed on video feed
+  - SentenceBuilder class exists (placeholder)
+
+New State:
+  - Detect special hand gestures (not ASL signs)
+  - Trigger sentence editing actions
+  - Provide visual feedback for gestures
+  - Prevent conflicts with ASL alphabet
+
+
+================================================================================
+PART 2: GESTURE DETECTION LOGIC
+================================================================================
+
+GESTURE #1: Open Palm (SPACE)
+────────────────────────────
+Landmark-based detection:
+  - All 5 fingertips extended upward (y-coordinate)
+  - Wrist at bottom (y-max)
+  - Fingers spread apart (x-spread > threshold)
+  - Palm facing camera (z-depth)
+
+Code signature:
+  def is_open_palm(landmarks)
+      Check: All fingertips (4, 8, 12, 16, 20) have y < hand center y
+      Check: Spread between fingers > 30px
+      Return: True if all checks pass
+
+
+GESTURE #2: Fist (BACKSPACE)
+─────────────────────────────
+Landmark-based detection:
+  - All fingers curled inward
+  - Fingertips (4, 8, 12, 16, 20) close to palm center
+  - Distance from fingertip to wrist < 40px
+
+Code signature:
+  def is_fist(landmarks)
+      Calculate distances from each fingertip to wrist
+      Check: All distances < 40px (threshold = curled)
+      Return: True if all checks pass
+
+
+GESTURE #3: Thumbs Up (SPEAK)
+──────────────────────────────
+Landmark-based detection:
+  - Thumb extended upward (y-coordinate)
+  - Thumb tip above wrist by >80px (vertical distance)
+  - Thumb perpendicular to hand plane
+  - Other 4 fingers curled (similar to fist check)
+
+Code signature:
+  def is_thumbs_up(landmarks)
+      Thumb tip (4) y-coordinate < wrist (0) y-coordinate - 80px
+      Other fingers curled (distance < 40px)
+      Return: True if both checks pass
+
+
+GESTURE #4: Two Open Palms (CLEAR)
+──────────────────────────────────
+Landmark-based detection:
+  - 2 hands detected (hands_data length == 2)
+  - Both hands are open palms (is_open_palm() for each)
+  - Palms facing camera (z similar for both)
+
+Code signature:
+  def is_two_open_palms(hands_data)
+      Check: len(hands_data) == 2
+      Check: is_open_palm(hands_data[0]['landmarks'])
+      Check: is_open_palm(hands_data[1]['landmarks'])
+      Return: True if all checks pass
+
+
+================================================================================
+PART 3: IMPLEMENTATION STEPS
+================================================================================
+
+STEP 1: Create gesture_detector.py module
+──────────────────────────────────────────
+
+Location: core/gesture_detector.py
+
+Create class: GestureDetector
+  
+  def __init__(self):
+      self.last_gesture_time = {}  # Cooldown tracking
+      self.cooldown_seconds = 0.5  # 500ms cooldown
+      self.landmark_threshold_spread = 30  # px
+      self.landmark_threshold_curl = 40   # px
+      self.landmark_threshold_thumbs = 80 # px vertical distance
+
+  def _distance(point1, point2):
+      """Calculate Euclidean distance between two landmarks."""
+      return ((point1.x - point2.x)**2 + (point1.y - point2.y)**2)**0.5
+
+  def is_open_palm(landmarks):
+      """
+      Detect open palm gesture (5 fingers extended).
+      
+      Args:
+          landmarks: MediaPipe hand landmarks object
+      
+      Returns:
+          bool: True if open palm detected
+      """
+      # Fingertip indices in MediaPipe
+      fingertip_indices = [4, 8, 12, 16, 20]  # thumb, index, middle, ring, pinky
+      wrist = landmarks.landmark[0]
+      
+      # Calculate hand center
+      hand_center_y = np.mean([landmarks.landmark[i].y for i in fingertip_indices])
+      hand_center_x = np.mean([landmarks.landmark[i].x for i in fingertip_indices])
+      wrist_y = wrist.y
+      
+      # Check 1: Fingers extended (above hand center)
+      fingers_extended = sum(1 for idx in fingertip_indices 
+                           if landmarks.landmark[idx].y < hand_center_y) >= 4
+      
+      # Check 2: Fingers spread apart
+      spread = max([landmarks.landmark[idx].x for idx in fingertip_indices]) - \
+               min([landmarks.landmark[idx].x for idx in fingertip_indices])
+      spread_ok = spread > self.landmark_threshold_spread
+      
+      # Check 3: Palm facing camera (z-depth consistent)
+      z_values = [landmarks.landmark[idx].z for idx in fingertip_indices]
+      z_consistent = max(z_values) - min(z_values) < 0.1
+      
+      return fingers_extended and spread_ok and z_consistent
+
+  def is_fist(landmarks):
+      """
+      Detect fist gesture (all fingers curled).
+      
+      Args:
+          landmarks: MediaPipe hand landmarks object
+      
+      Returns:
+          bool: True if fist detected
+      """
+      fingertip_indices = [4, 8, 12, 16, 20]
+      wrist = landmarks.landmark[0]
+      
+      # Calculate distances from fingertips to wrist
+      distances = []
+      for idx in fingertip_indices:
+          fingertip = landmarks.landmark[idx]
+          dist = self._distance(fingertip, wrist)
+          distances.append(dist)
+      
+      # All fingers curled (close to wrist)
+      all_curled = all(d < self.landmark_threshold_curl for d in distances)
+      
+      return all_curled
+
+  def is_thumbs_up(landmarks):
+      """
+      Detect thumbs up gesture.
+      
+      Args:
+          landmarks: MediaPipe hand landmarks object
+      
+      Returns:
+          bool: True if thumbs up detected
+      """
+      thumb_tip = landmarks.landmark[4]
+      wrist = landmarks.landmark[0]
+      other_fingertip_indices = [8, 12, 16, 20]
+      
+      # Check 1: Thumb extended upward
+      thumb_up = (wrist.y - thumb_tip.y) > (self.landmark_threshold_thumbs / 480)
+      
+      # Check 2: Other fingers curled
+      other_curled = all(self._distance(landmarks.landmark[idx], wrist) 
+                        < self.landmark_threshold_curl 
+                        for idx in other_fingertip_indices)
+      
+      return thumb_up and other_curled
+
+  def is_two_open_palms(hands_data):
+      """
+      Detect two open palms gesture.
+      
+      Args:
+          hands_data: List of hand data dicts from HandDetector
+      
+      Returns:
+          bool: True if two open palms detected
+      """
+      if len(hands_data) != 2:
+          return False
+      
+      return (self.is_open_palm(hands_data[0]['landmarks']) and 
+              self.is_open_palm(hands_data[1]['landmarks']))
+
+  def detect_gesture(hands_data):
+      """
+      Detect which gesture (if any) is being made.
+      
+      Args:
+          hands_data: List of hand data from HandDetector
+      
+      Returns:
+          str: Gesture name ('space', 'backspace', 'speak', 'clear') or None
+      """
+      current_time = time.time()
+      
+      # Check cooldown
+      for gesture, last_time in self.last_gesture_time.items():
+          if current_time - last_time < self.cooldown_seconds:
+              return None  # Still in cooldown
+      
+      if len(hands_data) == 0:
+          return None
+      
+      # Single hand gestures
+      if len(hands_data) >= 1:
+          hand = hands_data[0]['landmarks']
+          
+          if self.is_open_palm(hand):
+              self.last_gesture_time['space'] = current_time
+              return 'space'
+          
+          if self.is_fist(hand):
+              self.last_gesture_time['backspace'] = current_time
+              return 'backspace'
+          
+          if self.is_thumbs_up(hand):
+              self.last_gesture_time['speak'] = current_time
+              return 'speak'
+      
+      # Two-hand gesture
+      if self.is_two_open_palms(hands_data):
+          self.last_gesture_time['clear'] = current_time
+          return 'clear'
+      
+      return None
+
+
+STEP 2: Update SentenceBuilder class
+────────────────────────────────────
+
+Location: core/sentence_builder.py
+
+Extend existing class with methods:
+
+  class SentenceBuilder:
+      def __init__(self):
+          self.current_word = ""
+          self.sentence = ""
+          self.history = []  # For undo functionality
+      
+      def add_letter(self, letter):
+          """Add letter to current word."""
+          self.current_word += letter
+      
+      def add_space(self):
+          """Finish current word, add space."""
+          if self.current_word:
+              self.history.append((self.sentence, self.current_word))
+              self.sentence += self.current_word + " "
+              self.current_word = ""
+          return self.sentence
+      
+      def backspace(self):
+          """Delete last letter from current word."""
+          if self.current_word:
+              self.current_word = self.current_word[:-1]
+          elif self.sentence:  # If word empty, delete last word
+              words = self.sentence.strip().split()
+              if words:
+                  self.current_word = words[-1][:-1]  # Remove first letter
+                  self.sentence = " ".join(words[:-1]) + " "
+          return self.get_display_text()
+      
+      def clear(self):
+          """Clear entire sentence."""
+          self.sentence = ""
+          self.current_word = ""
+          return self.sentence
+      
+      def speak(self):
+          """Return text to be spoken."""
+          text = (self.sentence + self.current_word).strip()
+          return text
+      
+      def get_display_text(self):
+          """Return current display text."""
+          return self.sentence + self.current_word
+
+
+STEP 3: Create gesture visualization module
+────────────────────────────────────────────
+
+Location: utils/gesture_display.py
+
+  def draw_gesture_feedback(frame, gesture_name, position=(50, 120)):
+      """
+      Draw visual feedback for detected gesture.
+      
+      Args:
+          frame: OpenCV image
+          gesture_name: 'space', 'backspace', 'speak', 'clear', or None
+          position: (x, y) for text placement
+      """
+      if not gesture_name:
+          return frame
+      
+      gesture_messages = {
+          'space': ('SPACE', (0, 255, 0)),      # Green
+          'backspace': ('BACKSPACE', (0, 165, 255)),  # Orange
+          'speak': ('SPEAK', (255, 0, 0)),      # Blue
+          'clear': ('CLEAR', (0, 0, 255))       # Red
+      }
+      
+      if gesture_name not in gesture_messages:
+          return frame
+      
+      text, color = gesture_messages[gesture_name]
+      x, y = position
+      
+      # Draw background rectangle
+      cv2.rectangle(frame, (x - 5, y - 25), (x + 200, y + 10), (0, 0, 0), -1)
+      
+      # Draw text
+      cv2.putText(frame, f"GESTURE: {text}", (x, y), 
+                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+      
+      return frame
+  
+  def draw_sentence_display(frame, sentence_text, position=(10, 400)):
+      """
+      Draw current sentence on frame.
+      
+      Args:
+          frame: OpenCV image
+          sentence_text: Current sentence string
+          position: (x, y) for text placement
+      """
+      x, y = position
+      h, w, _ = frame.shape
+      
+      # Background box
+      cv2.rectangle(frame, (x - 5, y - 30), (w - 10, y + 40), (50, 50, 50), -1)
+      
+      # Label
+      cv2.putText(frame, "SENTENCE:", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 
+                 0.7, (255, 255, 0), 2)
+      
+      # Text
+      cv2.putText(frame, sentence_text, (x, y + 30), cv2.FONT_HERSHEY_SIMPLEX, 
+                 0.8, (255, 255, 255), 2)
+      
+      return frame
+
+
+STEP 4: Integrate into main.py
+───────────────────────────────
+
+In main.py, add at top:
+
+  from core.gesture_detector import GestureDetector
+  from core.sentence_builder import SentenceBuilder
+  from utils.gesture_display import draw_gesture_feedback, draw_sentence_display
+
+Initialize after existing initializations:
+
+  # Initialize gesture detection and sentence building
+  gesture_detector = GestureDetector()
+  sentence_builder = SentenceBuilder()
+  last_detected_gesture = None
+  gesture_cooldown = 0.5  # seconds
+
+In main loop, after hand processing (around line 115):
+
+  # GESTURE DETECTION - Check for control gestures
+  if hands_data:
+      gesture = gesture_detector.detect_gesture(hands_data)
+      
+      if gesture:
+          if gesture == 'space':
+              sentence_builder.add_space()
+          elif gesture == 'backspace':
+              sentence_builder.backspace()
+          elif gesture == 'speak':
+              text = sentence_builder.speak()
+              print(f"Speaking: {text}")
+              # TODO: Add text-to-speech integration
+          elif gesture == 'clear':
+              sentence_builder.clear()
+      
+      last_detected_gesture = gesture
+
+Before cv2.imshow():
+
+  # Draw gesture feedback
+  if last_detected_gesture:
+      frame = draw_gesture_feedback(frame, last_detected_gesture, (10, 250))
+  
+  # Draw current sentence
+  current_text = sentence_builder.get_display_text()
+  frame = draw_sentence_display(frame, current_text, (10, 450))
+
+
+================================================================================
+PART 4: CONFLICT PREVENTION WITH ASL SIGNS
+================================================================================
+
+Problem: How to distinguish gesture controls from ASL alphabet signs?
+
+Solution Options:
+
+OPTION A: Confidence-based filtering
+────────────────────────────────────
+  - Store prediction history (last 5 predictions)
+  - If 4/5 predictions differ, consider it a gesture
+  - Only process gestures when not in "signing" mode
+  
+  Implementation:
+    prediction_history = deque(maxlen=5)
+    
+    # Collect predictions
+    prediction_history.append(pred_label)
+    
+    # Check if this looks like user changing hand position (gesture)
+    if len(set(prediction_history)) >= 3:  # 3+ different signs
+        # Likely a gesture, not signing
+        gesture = gesture_detector.detect_gesture(hands_data)
+
+OPTION B: Explicit gesture entry/exit
+──────────────────────────────────────
+  - Add key 'g' to enter gesture mode
+  - In gesture mode: detect control gestures only
+  - In sign mode: detect ASL signs only
+  
+  Implementation:
+    if key == ord('g'):
+        gesture_mode = not gesture_mode
+        print(f"Gesture mode: {gesture_mode}")
+
+OPTION C: Confidence threshold + temporal filtering
+───────────────────────────────────────────────────
+  - Only process gestures if ASL confidence < 50%
+  - Only process signs if ASL confidence > 70%
+  - "Gray zone" (50-70%) ignored
+
+  Implementation (in main loop):
+    if pred_confidence > 0.70:
+        # Confident ASL sign
+        sentence_builder.add_letter(pred_label)
+    elif pred_confidence < 0.50 and hands_data:
+        # Low confidence, might be gesture
+        gesture = gesture_detector.detect_gesture(hands_data)
+
+RECOMMENDED: Use Option A (Confidence + History)
+  - Automatic, no keyboard input needed
+  - Works well with existing classifier
+  - Balances sign detection and control gestures
+
+
+================================================================================
+PART 5: TESTING CHECKLIST
+================================================================================
+
+UNIT TESTS - Test gesture_detector.py:
+
+  [ ] test_is_open_palm():
+      - Create test hand with 5 extended fingers
+      - Verify returns True
+      - Create closed fist, verify returns False
+  
+  [ ] test_is_fist():
+      - Create test hand with curled fingers
+      - Verify returns True
+      - Create open palm, verify returns False
+  
+  [ ] test_is_thumbs_up():
+      - Create test hand with thumb up
+      - Verify returns True
+      - Create flat palm, verify returns False
+  
+  [ ] test_is_two_open_palms():
+      - Create 2-hand test with both open
+      - Verify returns True
+      - Create 1 hand, verify returns False
+      - Create 2 hands but one fist, verify returns False
+  
+  [ ] test_cooldown():
+      - Trigger gesture twice in 100ms
+      - Verify only first is detected (cooldown working)
+      - Wait 600ms, trigger again
+      - Verify second gesture detected (cooldown expired)
+
+
+INTEGRATION TESTS - Test with main.py:
+
+  [ ] Run main.py with webcam
+  [ ] Show open palm → Check for "GESTURE: SPACE" on screen
+  [ ] Make fist → Check for "GESTURE: BACKSPACE" on screen
+  [ ] Thumbs up → Check for "GESTURE: SPEAK" on screen
+  [ ] Two open palms → Check for "GESTURE: CLEAR" on screen
+  
+  [ ] Test sentence building:
+      - Sign "A" → sentence shows "A"
+      - Sign "B" → sentence shows "AB"
+      - Open palm → sentence shows "A B" (word boundary)
+      - Fist → sentence shows "A" (backspace)
+      - Sign "C" → sentence shows "A C"
+  
+  [ ] Test cooldown:
+      - Rapidly open/close hand
+      - Gesture should fire once, then wait 500ms
+      - No spam of repeated gestures
+
+
+EDGE CASES:
+
+  [ ] No hands detected:
+      - App continues running
+      - No gesture detected
+      - No crashes
+  
+  [ ] One hand, mixed gestures:
+      - Transition from open palm to fist
+      - Both gestures detected (with cooldown)
+  
+  [ ] Two hands with one open, one fist:
+      - "Clear" NOT detected (requires both open)
+      - Individual hand gestures detected
+  
+  [ ] ASL sign vs gesture confusion:
+      - Sign "A" confidently → Add to sentence
+      - Show low-confidence random hand shape → Detect as gesture
+      - High-confidence sign should win over gesture
+
+
+================================================================================
+PART 6: FILE STRUCTURE
+================================================================================
+
+After implementation, your project should have:
+
+core/
+  ├── gesture_detector.py    [NEW] Gesture detection logic
+  ├── sentence_builder.py    [UPDATED] Add space/backspace/clear/speak
+  └── ...
+
+utils/
+  ├── gesture_display.py     [NEW] Gesture feedback visualization
+  └── ...
+
+main.py                       [UPDATED] Integrate gesture detection
+
+tests/
+  ├── test_gesture_detector.py [NEW] Unit tests for gestures
+  └── ...
+
+
+================================================================================
+PART 7: IMPLEMENTATION TIMELINE
+================================================================================
+
+Phase 1 (1 hour): Foundation
+  - Create gesture_detector.py with is_open_palm()
+  - Test with real webcam input
+  - Verify landmark calculations
+
+Phase 2 (1 hour): Complete gesture detection
+  - Add is_fist(), is_thumbs_up(), is_two_open_palms()
+  - Add cooldown mechanism
+  - Test all 4 gestures individually
+
+Phase 3 (30 min): Integration
+  - Update sentence_builder.py with action methods
+  - Create gesture_display.py for visual feedback
+  - Integrate into main.py
+
+Phase 4 (30 min): Conflict resolution
+  - Implement Option A (confidence + history filtering)
+  - Test gesture vs ASL sign distinction
+  - Tune thresholds
+
+Phase 5 (30 min): Polish & Testing
+  - Run full integration tests
+  - Optimize gesture detection thresholds
+  - Document gesture commands in UI overlay
+
+
+TOTAL ESTIMATED TIME: 3-4 hours
+
+
+================================================================================
+PART 8: PARAMETER TUNING
+================================================================================
+
+Key thresholds to adjust based on testing:
+
+1. landmark_threshold_spread (default: 30px)
+   - If palms not detected: Lower to 20
+   - If too many false positives: Raise to 40
+
+2. landmark_threshold_curl (default: 40px)
+   - If fists not detected: Raise to 50
+   - If false positives: Lower to 35
+
+3. landmark_threshold_thumbs (default: 80px)
+   - If thumbs up not detected: Lower to 60
+   - If false positives: Raise to 100
+
+4. cooldown_seconds (default: 0.5)
+   - If gestures feel sluggish: Lower to 0.3
+   - If accidental double-triggers: Raise to 0.7
+
+5. ASL confidence threshold (Option A)
+   - Gesture cutoff: Recommend 0.50
+   - Sign threshold: Recommend 0.70
+
+
+================================================================================
+PART 9: COMMON ISSUES & SOLUTIONS
+================================================================================
+
+ISSUE: Open palm not detected consistently
+FIX: 
+  - Increase landmark_threshold_spread
+  - Check z-depth consistency check (may be too strict)
+  - Try rotating hand slightly
+
+ISSUE: Fist detected when hand is just closed
+FIX:
+  - Increase landmark_threshold_curl to 50px
+  - Ensure fingertips are clearly curled inward
+  - Check that wrist is tracked accurately
+
+ISSUE: Gesture triggers when trying to sign
+FIX:
+  - Use Option A (confidence filtering)
+  - History needs 3+ different detections before gesture trigger
+  - Ensure ASL signs have >0.70 confidence
+
+ISSUE: Two-palm gesture won't trigger
+FIX:
+  - Ensure both hands detected (check hands_data length)
+  - Both hands must pass is_open_palm() independently
+  - Check hand visibility in camera
+
+ISSUE: Cooldown period too long/short
+FIX:
+  - Adjust cooldown_seconds parameter
+  - Test with user typing speed expectations
+  - Balance responsiveness vs accidental triggers
+
+
+================================================================================
+PART 10: ACCEPTANCE CRITERIA VERIFICATION
+================================================================================
+
+Criteria 1: Each gesture reliably detected using landmarks
+───────────────────────────────────────────────────────
+Test:
+  [ ] Open palm detected 9/10 times
+  [ ] Fist detected 9/10 times
+  [ ] Thumbs up detected 9/10 times
+  [ ] Two palms detected 9/10 times
+
+Acceptance: >80% detection accuracy
+
+
+Criteria 2: Gestures trigger correct SentenceBuilder actions
+─────────────────────────────────────────────────────────────
+Test:
+  [ ] Open palm → add_space() called
+  [ ] Fist → backspace() called
+  [ ] Thumbs up → speak() called
+  [ ] Two palms → clear() called
+
+Acceptance: 100% accuracy, correct method calls
+
+
+Criteria 3: Visual feedback shows recognized gesture
+─────────────────────────────────────────────────────
+Test:
+  [ ] Open palm → "GESTURE: SPACE" displayed in green
+  [ ] Fist → "GESTURE: BACKSPACE" displayed in orange
+  [ ] Thumbs up → "GESTURE: SPEAK" displayed in blue
+  [ ] Two palms → "GESTURE: CLEAR" displayed in red
+  [ ] Sentence building → Current text displayed and updated
+
+Acceptance: All feedback visible and clear
+
+
+Criteria 4: Cooldown prevents accidental repeated triggers
+───────────────────────────────────────────────────────────
+Test:
+  [ ] Rapidly open/close hand
+  [ ] Gesture fires once
+  [ ] Subsequent rapid triggers ignored for 500ms
+  [ ] After 600ms, gesture fires again
+
+Acceptance: No double-triggers within cooldown period
+
+
+Criteria 5: Gestures don't conflict with ASL alphabet signs
+───────────────────────────────────────────────────────
+Test:
+  [ ] Sign "A" confidently (>0.70) → Added to sentence, NOT as gesture
+  [ ] Show loose hand shape (<0.50 confidence) → Detected as gesture
+  [ ] Transition smoothly between signing and gesturing
+  [ ] ASL signs always prioritized over gestures when confident
+
+Acceptance: <5% false positive gestures during ASL signing
+
+
+================================================================================

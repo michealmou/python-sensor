@@ -12,6 +12,9 @@ import sys
 import logging
 import numpy as np
 
+from collections import deque
+from core.gesture_detector import GestureDetector
+from utils.gesture_display import draw_gesture_feedback, draw_sentence_display
 from xml.parsers.expat import model
 from core.sign_classifier import SignClassifier
 from core.hand_detector import HandDetector
@@ -69,8 +72,8 @@ class ChironaApp:
         # Runtime state variables
         self.prev_time = 0
         self.mode = "mouse"
-        self.max_hands_mode = 1 # start with single hand mode
-        
+        self.max_hands_mode = 2 # start with two hand mode
+        self.prediction_history = deque(maxlen=5)  # For gesture vs sign distinction
         self.smoother = PredictionSmoother(
             window_size=SMOOTHING_WINDOW_SIZE, 
             dominance_threshold=SMOOTHING_DOMINANCE_THRESHOLD
@@ -79,11 +82,34 @@ class ChironaApp:
         self.displayed_sign = None
         self.displayed_confidence = None
         self.frame_count = 0
+        # initilize gesture detector
+        self.gesture_detector = GestureDetector()
+        self.sentence_builder = SentenceBuilder()
+        self.last_detected_gesture = None
+        self.gesture_cooldown = 0.5  # seconds
 
-    def _process_prediction(self, hand):
-        """Extract features, predict gesture, and smooth the output for the UI."""
+    def _process_prediction(self, hand, hands_data):
+        """Extract features, predict gesture, and smooth the output for the UI.
+        Uses OPTION A: Confidence-based filtering to detect gestures vs ASL signs."""
         landmarks = hand['landmarks']
-        
+        gesture = self.gesture_detector.detect_gesture(hands_data)
+        # detect gestures first (before smoothing) since they rely on raw landmark positions and we want to catch them even if the predicted sign is unstable
+        if gesture:
+            # handle gesture control immediately
+            if gesture == 'space':
+                self.sentence_builder.add_space()
+            elif gesture == 'backspace':
+                self.sentence_builder.backspace()
+            elif gesture == 'speak':
+                text = self.sentence_builder.speak()
+                print(f"Speaking: {text}")
+            elif gesture == 'clear':
+                self.sentence_builder.clear()
+            self.last_detected_gesture = gesture
+            # Skip letter detection when gesture is detected to focus on gesture
+            return
+        else:
+            self.last_detected_gesture = None           
         # Only predict every 3rd frame to improve FPS
         if self.frame_count % 3 == 0:
             # Extract and normalize features
@@ -94,16 +120,20 @@ class ChironaApp:
             if self.classifier is not None:
                 label, confidence = self.classifier.predict(normalized_features)
                 
-                # Only process predictions above a low confidence baseline, to avoid noise
+                #Track prediction history for gesture/sign distinction
+                if confidence > 0.70:  # Only track confident predictions
+                    self.prediction_history.append(label)
+                
+                # Check if this looks like a gesture (hand moving with 2+ different detections)
+                unique_predictions = len(set(self.prediction_history))
+                
+                # consistent predictions = likely ASL sign, varying predictions = likely gesture
                 if confidence > 0.0:
                     self.smoother.add_prediction(label)
-                
                 stable = self.smoother.get_stable_prediction()
 
-                # Update displayed sign if stable prediction is available
+                # update displayd sign if stabl prediction is available
                 if stable is not None:
-                    # In a real scenario we'd track the confidence of the stable reading over the window,
-                    # but for now we just show the most recent raw confidence of the frame
                     self.displayed_sign = stable
                     self.displayed_confidence = confidence
 
@@ -151,10 +181,9 @@ class ChironaApp:
                 first_hand = hands_data[0]
                 
                 if self.mode == "sign_language":
-                    self._process_prediction(first_hand)
+                    self._process_prediction(first_hand, hands_data)
                 elif self.mode == "mouse":
                     self.controllers[self.mode].process_frame(frame, first_hand, self.detector)
-
             # Calculate FPS
             current_time = time.time()
             fps = 1 / (current_time - self.prev_time) if self.prev_time > 0 else 0
@@ -182,7 +211,13 @@ class ChironaApp:
             # Display sentence builder UI
             if self.mode == "sign_language":
                 draw_sentence_builder_ui(frame, self.sentence_builder, current_time)
-
+            # Display gesture feedback
+            if self.mode == "sign_language" and self.last_detected_gesture:
+                frame = draw_gesture_feedback(frame, self.last_detected_gesture, (10, 250))
+            # display current sentence
+            if self.mode == "sign_language":
+                current_text = self.sentence_builder.get_display_text()
+                frame = draw_sentence_display(frame, current_text, (10, 450))   
             cv2.imshow(WINDOW_TITLE, frame)
 
             # Break loop if _handle_keypress asks to exit

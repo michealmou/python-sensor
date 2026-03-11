@@ -1,0 +1,744 @@
+================================================================================
+UNIT TESTS FOR gesture_detector.py - STEP-BY-STEP GUIDE
+================================================================================
+
+Purpose: Test all gesture detection functions independently
+Location: tests/test_gesture_detector.py
+Created: March 10, 2026
+
+
+================================================================================
+PART 1: TEST SETUP & PREREQUISITES
+================================================================================
+
+STEP 1: Create test file structure
+──────────────────────────────────
+
+Create new file: tests/test_gesture_detector.py
+
+Directory structure:
+  tests/
+    ├── test_gesture_detector.py  [NEW - you create this]
+    ├── __init__.py
+    └── test_*.py (other existing tests)
+
+
+STEP 2: Install required testing library
+────────────────────────────────────────
+
+Run in terminal:
+  pip install pytest
+
+Verify installation:
+  pytest --version
+
+
+STEP 3: Understand MediaPipe landmark structure
+────────────────────────────────────────────────
+
+MediaPipe Hands returns landmarks as objects with properties:
+  - landmark[0] = Wrist
+  - landmark[1-4] = Thumb (base, middle joint, pip, tip)
+  - landmark[5-8] = Index (base, middle joint, pip, tip)
+  - landmark[9-12] = Middle (base, middle joint, pip, tip)
+  - landmark[13-16] = Ring (base, middle joint, pip, tip)
+  - landmark[17-20] = Pinky (base, middle joint, pip, tip)
+
+Key indices:
+  - 0 = Wrist (always index 0)
+  - 4 = Thumb tip
+  - 8 = Index fingertip
+  - 12 = Middle fingertip
+  - 16 = Ring fingertip
+  - 20 = Pinky fingertip
+
+Each landmark has:
+  - .x (normalized 0.0-1.0, left-right)
+  - .y (normalized 0.0-1.0, top-bottom)
+  - .z (normalized depth, -1.0 to 1.0)
+
+
+================================================================================
+PART 2: CREATE MOCK LANDMARK OBJECT
+================================================================================
+
+Create mock hand landmarks for testing (add to test file):
+
+```python
+import pytest
+import numpy as np
+import time
+from core.gesture_detector import GestureDetector
+
+
+# Mock Landmark class (mimics MediaPipe's landmark)
+class MockLandmark:
+    """Simulates a MediaPipe landmark point."""
+    def __init__(self, x, y, z=0.0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+class MockHandLandmarks:
+    """Simulates MediaPipe's hand landmarks object."""
+    def __init__(self, points):
+        """
+        Args:
+            points: List of (x, y, z) tuples for 21 landmarks
+                   Index 0 = wrist, 4/8/12/16/20 = fingertips
+        """
+        self.landmark = [MockLandmark(x, y, z) for x, y, z in points]
+
+
+# Factory functions to create test hands
+
+def create_open_palm():
+    """Create mock hand in open palm position."""
+    return MockHandLandmarks([
+        (0.5, 0.9, 0.0),    # 0: Wrist (bottom center)
+        (0.4, 0.5, 0.0),    # 1: Thumb base
+        (0.3, 0.4, 0.0),    # 2: Thumb middle
+        (0.2, 0.2, 0.0),    # 3: Thumb pip
+        (0.15, 0.05, 0.0),  # 4: Thumb tip (extended up)
+        (0.5, 0.5, 0.0),    # 5: Index base
+        (0.5, 0.3, 0.0),    # 6: Index middle
+        (0.5, 0.15, 0.0),   # 7: Index pip
+        (0.5, 0.05, 0.0),   # 8: Index tip (extended up)
+        (0.55, 0.5, 0.0),   # 9: Middle base
+        (0.55, 0.3, 0.0),   # 10: Middle middle
+        (0.55, 0.15, 0.0),  # 11: Middle pip
+        (0.55, 0.05, 0.0),  # 12: Middle tip (extended up)
+        (0.6, 0.5, 0.0),    # 13: Ring base
+        (0.6, 0.3, 0.0),    # 14: Ring middle
+        (0.6, 0.15, 0.0),   # 15: Ring pip
+        (0.6, 0.05, 0.0),   # 16: Ring tip (extended up)
+        (0.65, 0.5, 0.0),   # 17: Pinky base
+        (0.65, 0.3, 0.0),   # 18: Pinky middle
+        (0.65, 0.15, 0.0),  # 19: Pinky pip
+        (0.65, 0.05, 0.0),  # 20: Pinky tip (extended up)
+    ])
+
+
+def create_fist():
+    """Create mock hand in fist position (all fingers curled)."""
+    return MockHandLandmarks([
+        (0.5, 0.9, 0.0),    # 0: Wrist
+        (0.45, 0.7, 0.0),   # 1: Thumb base
+        (0.45, 0.75, 0.0),  # 2: Thumb middle
+        (0.45, 0.8, 0.0),   # 3: Thumb pip
+        (0.45, 0.82, 0.0),  # 4: Thumb tip (curled close to wrist)
+        (0.5, 0.7, 0.0),    # 5: Index base
+        (0.5, 0.75, 0.0),   # 6: Index middle
+        (0.5, 0.8, 0.0),    # 7: Index pip
+        (0.5, 0.82, 0.0),   # 8: Index tip (curled)
+        (0.55, 0.7, 0.0),   # 9: Middle base
+        (0.55, 0.75, 0.0),  # 10: Middle middle
+        (0.55, 0.8, 0.0),   # 11: Middle pip
+        (0.55, 0.82, 0.0),  # 12: Middle tip (curled)
+        (0.6, 0.7, 0.0),    # 13: Ring base
+        (0.6, 0.75, 0.0),   # 14: Ring middle
+        (0.6, 0.8, 0.0),    # 15: Ring pip
+        (0.6, 0.82, 0.0),   # 16: Ring tip (curled)
+        (0.65, 0.7, 0.0),   # 17: Pinky base
+        (0.65, 0.75, 0.0),  # 18: Pinky middle
+        (0.65, 0.8, 0.0),   # 19: Pinky pip
+        (0.65, 0.82, 0.0),  # 20: Pinky tip (curled)
+    ])
+
+
+def create_thumbs_up():
+    """Create mock hand in thumbs up position."""
+    return MockHandLandmarks([
+        (0.5, 0.9, 0.0),    # 0: Wrist (at bottom)
+        (0.45, 0.5, 0.0),   # 1: Thumb base
+        (0.45, 0.3, 0.0),   # 2: Thumb middle
+        (0.45, 0.1, 0.0),   # 3: Thumb pip
+        (0.45, 0.0, 0.0),   # 4: Thumb tip (extended way up)
+        (0.5, 0.7, 0.0),    # 5: Index base
+        (0.5, 0.75, 0.0),   # 6: Index middle
+        (0.5, 0.8, 0.0),    # 7: Index pip
+        (0.5, 0.82, 0.0),   # 8: Index tip (curled)
+        (0.55, 0.7, 0.0),   # 9: Middle base
+        (0.55, 0.75, 0.0),  # 10: Middle middle
+        (0.55, 0.8, 0.0),   # 11: Middle pip
+        (0.55, 0.82, 0.0),  # 12: Middle tip (curled)
+        (0.6, 0.7, 0.0),    # 13: Ring base
+        (0.6, 0.75, 0.0),   # 14: Ring middle
+        (0.6, 0.8, 0.0),    # 15: Ring pip
+        (0.6, 0.82, 0.0),   # 16: Ring tip (curled)
+        (0.65, 0.7, 0.0),   # 17: Pinky base
+        (0.65, 0.75, 0.0),  # 18: Pinky middle
+        (0.65, 0.8, 0.0),   # 19: Pinky pip
+        (0.65, 0.82, 0.0),  # 20: Pinky tip (curled)
+    ])
+```
+
+
+================================================================================
+PART 3: TEST 1 - open_palm()
+================================================================================
+
+Test Function: test_is_open_palm()
+
+Purpose: Verify open palm detection works correctly
+
+Code:
+
+```python
+def test_is_open_palm():
+    """Test is_open_palm() method."""
+    detector = GestureDetector()
+    
+    # TEST CASE 1: Create open palm, expect True
+    open_palm = create_open_palm()
+    result = detector.is_open_palm(open_palm)
+    assert result is True, "Open palm should be detected"
+    print("✓ Test 1.1 passed: Open palm detected correctly")
+    
+    # TEST CASE 2: Create fist, expect False
+    fist = create_fist()
+    result = detector.is_open_palm(fist)
+    assert result is False, "Fist should NOT be detected as open palm"
+    print("✓ Test 1.2 passed: Fist correctly rejected")
+
+
+def test_open_palm_partial():
+    """Test edge case: only 3 fingers extended (should be False)."""
+    detector = GestureDetector()
+    
+    # Create hand with only 3 extended fingers
+    partial_palm = MockHandLandmarks([
+        (0.5, 0.9, 0.0),    # Wrist
+        # Thumb (curled)
+        (0.45, 0.7, 0.0),
+        (0.45, 0.75, 0.0),
+        (0.45, 0.8, 0.0),
+        (0.45, 0.82, 0.0),
+        # Index (extended)
+        (0.5, 0.5, 0.0),
+        (0.5, 0.3, 0.0),
+        (0.5, 0.15, 0.0),
+        (0.5, 0.05, 0.0),
+        # Middle (extended)
+        (0.55, 0.5, 0.0),
+        (0.55, 0.3, 0.0),
+        (0.55, 0.15, 0.0),
+        (0.55, 0.05, 0.0),
+        # Ring (extended)
+        (0.6, 0.5, 0.0),
+        (0.6, 0.3, 0.0),
+        (0.6, 0.15, 0.0),
+        (0.6, 0.05, 0.0),
+        # Pinky (curled)
+        (0.65, 0.7, 0.0),
+        (0.65, 0.75, 0.0),
+        (0.65, 0.8, 0.0),
+        (0.65, 0.82, 0.0),
+    ])
+    
+    result = detector.is_open_palm(partial_palm)
+    assert result is False, "Only 3 extended fingers should not be open palm"
+    print("✓ Test 1.3 passed: Partial palm correctly rejected (needs 4+ fingers)")
+```
+
+Run this test:
+  pytest test_gesture_detector.py::test_is_open_palm -v
+
+
+================================================================================
+PART 4: TEST 2 - is_fist()
+================================================================================
+
+Test Function: test_is_fist()
+
+Purpose: Verify fist detection works correctly
+
+Code:
+
+```python
+def test_is_fist():
+    """Test is_fist() method."""
+    detector = GestureDetector()
+    
+    # TEST CASE 1: Create fist, expect True
+    fist = create_fist()
+    result = detector.is_fist(fist)
+    assert result is True, "Fist should be detected"
+    print("✓ Test 2.1 passed: Fist detected correctly")
+    
+    # TEST CASE 2: Create open palm, expect False
+    open_palm = create_open_palm()
+    result = detector.is_fist(open_palm)
+    assert result is False, "Open palm should NOT be detected as fist"
+    print("✓ Test 2.2 passed: Open palm correctly rejected")
+
+
+def test_fist_partial():
+    """Test edge case: only some fingers curled (should be False)."""
+    detector = GestureDetector()
+    
+    # Create hand with only 2 curled fingers
+    partial_fist = MockHandLandmarks([
+        (0.5, 0.9, 0.0),    # Wrist
+        # Thumb (curled)
+        (0.45, 0.7, 0.0),
+        (0.45, 0.75, 0.0),
+        (0.45, 0.8, 0.0),
+        (0.45, 0.82, 0.0),
+        # Index (extended)
+        (0.5, 0.5, 0.0),
+        (0.5, 0.3, 0.0),
+        (0.5, 0.15, 0.0),
+        (0.5, 0.05, 0.0),
+        # Rest curled...
+        (0.55, 0.7, 0.0),
+        (0.55, 0.75, 0.0),
+        (0.55, 0.8, 0.0),
+        (0.55, 0.82, 0.0),
+        (0.6, 0.7, 0.0),
+        (0.6, 0.75, 0.0),
+        (0.6, 0.8, 0.0),
+        (0.6, 0.82, 0.0),
+        (0.65, 0.7, 0.0),
+        (0.65, 0.75, 0.0),
+        (0.65, 0.8, 0.0),
+        (0.65, 0.82, 0.0),
+    ])
+    
+    result = detector.is_fist(partial_fist)
+    assert result is False, "Fist with extended fingers should not be detected"
+    print("✓ Test 2.3 passed: Partial fist correctly rejected")
+```
+
+Run this test:
+  pytest test_gesture_detector.py::test_is_fist -v
+
+
+================================================================================
+PART 5: TEST 3 - is_thumbs_up()
+================================================================================
+
+Test Function: test_is_thumbs_up()
+
+Purpose: Verify thumbs up detection works correctly
+
+Code:
+
+```python
+def test_is_thumbs_up():
+    """Test is_thumbs_up() method."""
+    detector = GestureDetector()
+    
+    # TEST CASE 1: Create thumbs up, expect True
+    thumbs_up = create_thumbs_up()
+    result = detector.is_thumbs_up(thumbs_up)
+    assert result is True, "Thumbs up should be detected"
+    print("✓ Test 3.1 passed: Thumbs up detected correctly")
+    
+    # TEST CASE 2: Create open palm, expect False (no extended single thumb)
+    open_palm = create_open_palm()
+    result = detector.is_thumbs_up(open_palm)
+    assert result is False, "Open palm should NOT be thumbs up"
+    print("✓ Test 3.2 passed: Open palm correctly rejected")
+    
+    # TEST CASE 3: Create fist, expect False
+    fist = create_fist()
+    result = detector.is_thumbs_up(fist)
+    assert result is False, "Fist should NOT be thumbs up"
+    print("✓ Test 3.3 passed: Fist correctly rejected")
+```
+
+Run this test:
+  pytest test_gesture_detector.py::test_is_thumbs_up -v
+
+
+================================================================================
+PART 6: TEST 4 - is_two_open_palms()
+================================================================================
+
+Test Function: test_is_two_open_palms()
+
+Purpose: Verify two hands open palm detection works correctly
+
+Code:
+
+```python
+def test_is_two_open_palms():
+    """Test is_two_open_palms() method."""
+    detector = GestureDetector()
+    
+    # TEST CASE 1: Two open palms, expect True
+    hands_data_both_open = [
+        {'landmarks': create_open_palm()},
+        {'landmarks': create_open_palm()},
+    ]
+    result = detector.is_two_open_palms(hands_data_both_open)
+    assert result is True, "Two open palms should be detected"
+    print("✓ Test 4.1 passed: Two open palms detected correctly")
+    
+    # TEST CASE 2: One hand (not two), expect False
+    hands_data_one = [
+        {'landmarks': create_open_palm()},
+    ]
+    result = detector.is_two_open_palms(hands_data_one)
+    assert result is False, "Single hand should NOT trigger two-palm gesture"
+    print("✓ Test 4.2 passed: Single hand correctly rejected")
+    
+    # TEST CASE 3: Two hands, one open one fist, expect False
+    hands_data_mixed = [
+        {'landmarks': create_open_palm()},
+        {'landmarks': create_fist()},
+    ]
+    result = detector.is_two_open_palms(hands_data_mixed)
+    assert result is False, "One open + one fist should NOT trigger clear"
+    print("✓ Test 4.3 passed: Mixed hands correctly rejected")
+    
+    # TEST CASE 4: Zero hands, expect False
+    hands_data_none = []
+    result = detector.is_two_open_palms(hands_data_none)
+    assert result is False, "Zero hands should NOT trigger two-palm gesture"
+    print("✓ Test 4.4 passed: No hands correctly rejected")
+```
+
+Run this test:
+  pytest test_gesture_detector.py::test_is_two_open_palms -v
+
+
+================================================================================
+PART 7: TEST 5 - Cooldown Mechanism
+================================================================================
+
+Test Function: test_cooldown()
+
+Purpose: Verify cooldown prevents rapid repeated gesture triggers
+
+Code:
+
+```python
+def test_cooldown():
+    """Test cooldown mechanism prevents double-triggers."""
+    detector = GestureDetector()
+    
+    # TEST CASE 1: Trigger same gesture twice within 100ms
+    # Should only return gesture first time, None second time
+    hands_data = [
+        {'landmarks': create_open_palm()},
+    ]
+    
+    # First call - should detect gesture
+    gesture1 = detector.detect_gesture(hands_data)
+    assert gesture1 == 'space', "First open palm should be detected"
+    print("✓ Test 5.1 passed: First gesture detected")
+    
+    # Second call immediately after - should be in cooldown
+    gesture2 = detector.detect_gesture(hands_data)
+    assert gesture2 is None, "Second gesture within cooldown should return None"
+    print("✓ Test 5.2 passed: Second gesture blocked by cooldown")
+    
+    # Wait 100ms more (total 100ms elapsed)
+    time.sleep(0.1)
+    gesture3 = detector.detect_gesture(hands_data)
+    assert gesture3 is None, "Even after 100ms, still in cooldown (500ms total)"
+    print("✓ Test 5.3 passed: Still in cooldown after 100ms")
+    
+    # Wait 400ms more (total 500ms elapsed)
+    time.sleep(0.4)
+    gesture4 = detector.detect_gesture(hands_data)
+    assert gesture4 == 'space', "After 500ms cooldown should expire"
+    print("✓ Test 5.4 passed: Gesture detected after cooldown expires")
+
+
+def test_cooldown_different_gestures():
+    """Test that cooldown is per-gesture (not global)."""
+    detector = GestureDetector()
+    
+    # This is optional/advanced test
+    # If your implementation tracks cooldown per gesture, different gestures
+    # could potentially trigger at same time without blocking each other
+    # Current implementation blocks all gestures during cooldown period
+    
+    hands_open = [{'landmarks': create_open_palm()}]
+    hands_fist = [{'landmarks': create_fist()}]
+    
+    # Open palm detected
+    g1 = detector.detect_gesture(hands_open)
+    assert g1 == 'space'
+    
+    # Immediately switch to fist - should be blocked by cooldown
+    # (because cooldown is global, not per-gesture)
+    g2 = detector.detect_gesture(hands_fist)
+    assert g2 is None, "Different gesture still blocked by active cooldown"
+    print("✓ Test 5.5 passed: Cooldown blocks all gestures (not per-gesture)")
+```
+
+Run this test:
+  pytest test_gesture_detector.py::test_cooldown -v
+
+
+================================================================================
+PART 8: RUN ALL TESTS
+================================================================================
+
+Run individual test:
+  pytest test_gesture_detector.py::test_is_open_palm -v
+
+Run all tests in file:
+  pytest test_gesture_detector.py -v
+
+Run with output:
+  pytest test_gesture_detector.py -v -s
+
+Run and show which tests passed:
+  pytest test_gesture_detector.py -v --tb=short
+
+
+Expected output:
+  test_gesture_detector.py::test_is_open_palm PASSED
+  test_gesture_detector.py::test_is_fist PASSED
+  test_gesture_detector.py::test_is_thumbs_up PASSED
+  test_gesture_detector.py::test_is_two_open_palms PASSED
+  test_gesture_detector.py::test_cooldown PASSED
+  
+  ============ 5 passed in 1.23s ============
+
+
+================================================================================
+PART 9: TROUBLESHOOTING FAILED TESTS
+================================================================================
+
+If a test fails, check:
+
+ISSUE: test_is_open_palm fails
+───────────────────────────────
+Possible causes:
+  1. Spread threshold too high - fingers not far enough apart
+     FIX: Lower landmark_threshold_spread to 20
+  2. Z-depth check too strict
+     FIX: Increase z_consistent threshold to 0.2
+  3. Fingers not extended enough
+     FIX: Adjust test hand - make fingertips higher (smaller y value)
+
+
+ISSUE: test_is_fist fails
+──────────────────────────
+Possible causes:
+  1. Curl threshold too low - fingers considered too far
+     FIX: Raise landmark_threshold_curl to 50
+  2. Test hand not curled enough
+     FIX: Make fingertips closer to wrist (increase y value to 0.85-0.90)
+
+
+ISSUE: test_is_thumbs_up fails
+────────────────────────────────
+Possible causes:
+  1. Thumb distance threshold too strict
+     FIX: Lower landmark_threshold_thumbs to 60
+  2. Other fingers not curled enough
+     FIX: Adjust test hand, move finger tips closer to wrist
+  3. Thumb not high enough
+     FIX: Make thumb tip y-coordinate even smaller (0.0 or negative)
+
+
+ISSUE: test_cooldown times out
+───────────────────────────────
+Possible causes:
+  1. Test PC is slow - time.sleep() may take longer
+     FIX: Use slightly longer wait times (0.6 seconds instead of 0.5)
+  2. Cooldown threshold different in your implementation
+     FIX: Check GestureDetector.__init__() cooldown_seconds value
+
+
+================================================================================
+PART 10: DEBUGGING TIPS
+================================================================================
+
+Add debug output to see what's happening:
+
+```python
+def test_is_open_palm_debug():
+    """Test with debug output."""
+    detector = GestureDetector()
+    open_palm = create_open_palm()
+    
+    # Manually check what we're detecting
+    fingertip_indices = [4, 8, 12, 16, 20]
+    hand_center_y = np.mean([open_palm.landmark[i].y for i in fingertip_indices])
+    
+    print(f"Hand center Y: {hand_center_y}")
+    print(f"Fingertip Y positions:")
+    for idx in fingertip_indices:
+        print(f"  Landmark {idx}: x={open_palm.landmark[idx].x:.2f}, y={open_palm.landmark[idx].y:.2f}")
+    
+    # Now run the test
+    result = detector.is_open_palm(open_palm)
+    print(f"Result: {result}")
+    assert result is True
+```
+
+Print detector thresholds:
+```python
+def test_show_thresholds():
+    detector = GestureDetector()
+    print(f"Spread threshold: {detector.landmark_threshold_spread}")
+    print(f"Curl threshold: {detector.landmark_threshold_curl}")
+    print(f"Thumbs threshold: {detector.landmark_threshold_thumbs}")
+    print(f"Cooldown: {detector.cooldown_seconds}s")
+```
+
+
+================================================================================
+PART 11: COMPLETE TEST FILE TEMPLATE
+================================================================================
+
+Full test file to copy-paste:
+
+```python
+"""
+Unit tests for GestureDetector class.
+Tests individual gesture detection functions.
+"""
+
+import pytest
+import time
+from core.gesture_detector import GestureDetector
+
+
+# ============= Mock Landmark Classes =============
+
+class MockLandmark:
+    """Simulates MediaPipe landmark."""
+    def __init__(self, x, y, z=0.0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+class MockHandLandmarks:
+    """Simulates MediaPipe hand landmarks."""
+    def __init__(self, points):
+        self.landmark = [MockLandmark(x, y, z) for x, y, z in points]
+
+
+# ============= Test Hand Factories =============
+
+def create_open_palm():
+    """Open palm with all 5 fingers extended."""
+    return MockHandLandmarks([
+        (0.5, 0.9, 0.0), (0.4, 0.5, 0.0), (0.3, 0.4, 0.0), (0.2, 0.2, 0.0), (0.15, 0.05, 0.0),
+        (0.5, 0.5, 0.0), (0.5, 0.3, 0.0), (0.5, 0.15, 0.0), (0.5, 0.05, 0.0),
+        (0.55, 0.5, 0.0), (0.55, 0.3, 0.0), (0.55, 0.15, 0.0), (0.55, 0.05, 0.0),
+        (0.6, 0.5, 0.0), (0.6, 0.3, 0.0), (0.6, 0.15, 0.0), (0.6, 0.05, 0.0),
+        (0.65, 0.5, 0.0), (0.65, 0.3, 0.0), (0.65, 0.15, 0.0), (0.65, 0.05, 0.0),
+    ])
+
+
+def create_fist():
+    """Fist with all fingers curled."""
+    return MockHandLandmarks([
+        (0.5, 0.9, 0.0), (0.45, 0.7, 0.0), (0.45, 0.75, 0.0), (0.45, 0.8, 0.0), (0.45, 0.82, 0.0),
+        (0.5, 0.7, 0.0), (0.5, 0.75, 0.0), (0.5, 0.8, 0.0), (0.5, 0.82, 0.0),
+        (0.55, 0.7, 0.0), (0.55, 0.75, 0.0), (0.55, 0.8, 0.0), (0.55, 0.82, 0.0),
+        (0.6, 0.7, 0.0), (0.6, 0.75, 0.0), (0.6, 0.8, 0.0), (0.6, 0.82, 0.0),
+        (0.65, 0.7, 0.0), (0.65, 0.75, 0.0), (0.65, 0.8, 0.0), (0.65, 0.82, 0.0),
+    ])
+
+
+def create_thumbs_up():
+    """Thumbs up with only thumb extended."""
+    return MockHandLandmarks([
+        (0.5, 0.9, 0.0), (0.45, 0.5, 0.0), (0.45, 0.3, 0.0), (0.45, 0.1, 0.0), (0.45, 0.0, 0.0),
+        (0.5, 0.7, 0.0), (0.5, 0.75, 0.0), (0.5, 0.8, 0.0), (0.5, 0.82, 0.0),
+        (0.55, 0.7, 0.0), (0.55, 0.75, 0.0), (0.55, 0.8, 0.0), (0.55, 0.82, 0.0),
+        (0.6, 0.7, 0.0), (0.6, 0.75, 0.0), (0.6, 0.8, 0.0), (0.6, 0.82, 0.0),
+        (0.65, 0.7, 0.0), (0.65, 0.75, 0.0), (0.65, 0.8, 0.0), (0.65, 0.82, 0.0),
+    ])
+
+
+# ============= Test Functions =============
+
+def test_is_open_palm():
+    """Test open palm detection."""
+    detector = GestureDetector()
+    assert detector.is_open_palm(create_open_palm()) is True
+    assert detector.is_open_palm(create_fist()) is False
+    print("✓ Open palm tests passed")
+
+
+def test_is_fist():
+    """Test fist detection."""
+    detector = GestureDetector()
+    assert detector.is_fist(create_fist()) is True
+    assert detector.is_fist(create_open_palm()) is False
+    print("✓ Fist tests passed")
+
+
+def test_is_thumbs_up():
+    """Test thumbs up detection."""
+    detector = GestureDetector()
+    assert detector.is_thumbs_up(create_thumbs_up()) is True
+    assert detector.is_thumbs_up(create_open_palm()) is False
+    assert detector.is_thumbs_up(create_fist()) is False
+    print("✓ Thumbs up tests passed")
+
+
+def test_is_two_open_palms():
+    """Test two open palms detection."""
+    detector = GestureDetector()
+    hands_both_open = [{'landmarks': create_open_palm()}, {'landmarks': create_open_palm()}]
+    hands_one = [{'landmarks': create_open_palm()}]
+    hands_mixed = [{'landmarks': create_open_palm()}, {'landmarks': create_fist()}]
+    
+    assert detector.is_two_open_palms(hands_both_open) is True
+    assert detector.is_two_open_palms(hands_one) is False
+    assert detector.is_two_open_palms(hands_mixed) is False
+    assert detector.is_two_open_palms([]) is False
+    print("✓ Two open palms tests passed")
+
+
+def test_cooldown():
+    """Test cooldown mechanism."""
+    detector = GestureDetector()
+    hands = [{'landmarks': create_open_palm()}]
+    
+    g1 = detector.detect_gesture(hands)
+    assert g1 == 'space', "First gesture should be detected"
+    
+    g2 = detector.detect_gesture(hands)
+    assert g2 is None, "Second gesture blocked by cooldown"
+    
+    time.sleep(0.6)
+    g3 = detector.detect_gesture(hands)
+    assert g3 == 'space', "Gesture detected after cooldown expires"
+    print("✓ Cooldown tests passed")
+
+
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])
+```
+
+Save as: tests/test_gesture_detector.py
+
+
+================================================================================
+PART 12: RUN FINAL TEST SUITE
+================================================================================
+
+Run all tests:
+  cd c:\Users\Admin\Downloads\hand-2-cursor-2
+  pytest tests/test_gesture_detector.py -v
+
+Expected successful output:
+  ========= test session starts ==========
+  test_gesture_detector.py::test_is_open_palm PASSED
+  test_gesture_detector.py::test_is_fist PASSED
+  test_gesture_detector.py::test_is_thumbs_up PASSED
+  test_gesture_detector.py::test_is_two_open_palms PASSED
+  test_gesture_detector.py::test_cooldown PASSED
+  
+  ========= 5 passed in 2.34s ===========
+
+If all tests pass, gesture_detector.py is ready for integration! ✓
+
+
+================================================================================
