@@ -48,4 +48,17 @@ COLOR_BLACK_BG = (50, 50, 50)     # Gray background bars
 # ── Prediction Confidence Thresholds ──────────────────
 CONFIDENCE_HIGH = 0.8             # Threshold for green prediction UI
 CONFIDENCE_MEDIUM = 0.5           # Threshold for yellow prediction UI
-CONFIDENCE_THRESHOLD = 0.70       # Minimum confidence to display prediction (70%)
+CONFIDENCE_THRESHOLD=0.70          # Minimum confidence to display prediction (70%)
+
+# ── Sentence Builder ──────────────────────────────────
+CONFIRM_DURATION = 1.5            # Seconds to wait before confirming a word
+
+# ── Data Processing ───────────────────────────────────
+DEFAULT_PICKLE = "data/landmarks.pickle"
+EXPECTED_FEATURES = 42          # 21 landmarks × 2 (x, y)
+IMBALANCE_THRESHOLD = 0.5       # warn if any class has < 50% of the max count
+
+CLICK_COOLDOWN = 0.5 # 500ms cooldown between clicks to prevent multiple triggers from one gesture
+SPREAD_THRESHOLD = 30 # Minimum normalized distance between thumb and pinky for "spread" gesture
+CURL_THRESHOLD = 40 # Threshold for determining if fingers are curled (0 to 1)
+THUMBS_THRESHOLD = 80 # Threshold for determining if thumb is up (0
