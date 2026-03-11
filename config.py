@@ -13,6 +13,9 @@ MAX_HANDS = 2                 # Max simultaneous hands
 DETECTION_CONFIDENCE = 0.7    # Min detection confidence
 TRACKING_CONFIDENCE = 0.7     # Min tracking confidence
 
+# ── Display ───────────────────────────────────────────
+WINDOW_TITLE = "Hand Tracking"
+
 # ── Data ─────────────────────────────────────────────
 DATA_DIR = "./data/raw"
 
